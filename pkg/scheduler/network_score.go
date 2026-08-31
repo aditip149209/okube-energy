@@ -127,11 +127,11 @@ func resolveScoreWeights(scoreCtx *ScoreContext) (float64, float64) {
 	nw := defaultNetworkWeight
 	rw := defaultResourceWeight
 	if scoreCtx != nil {
-		if scoreCtx.NetworkWeight > 0 {
-			nw = scoreCtx.NetworkWeight
+		if scoreCtx.NetworkWeight != nil {
+			nw = *scoreCtx.NetworkWeight
 		}
-		if scoreCtx.ResourceWeight > 0 {
-			rw = scoreCtx.ResourceWeight
+		if scoreCtx.ResourceWeight != nil {
+			rw = *scoreCtx.ResourceWeight
 		}
 	}
 

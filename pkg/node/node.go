@@ -29,6 +29,7 @@ type Node struct {
 	Role            string
 	TaskCount       int
 	Cpu             int
+	CarbonIntensity float64
 }
 
 type Option func(*Node)

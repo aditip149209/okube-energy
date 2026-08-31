@@ -37,7 +37,9 @@ type FinalSelectionPlugin interface {
 
 // ComposableScheduler executes scheduling in ordered plugin stages:
 // QueueSort -> ResourceFilter -> NetworkFilter -> ResourceScore ->
-// NetworkScore -> FinalSelection.
+// NetworkScore -> EnergyScore -> FinalSelection. NetworkScore and
+// EnergyScore can each be skipped via ScoreContext.DisableNetworkScore /
+// DisableEnergyScore, e.g. to run isolated baselines for evaluation.
 type ComposableScheduler struct {
 	queueSorter    *QueueSorter
 	resourceFilter ResourceFilterPlugin
@@ -92,15 +94,25 @@ func (c *ComposableScheduler) Score(t task.Task, nodes []*node.Node, scoreCtx *S
 
 	// 4) Resource scoring.
 	resourceScores := c.resourceScore.Score(t, nodes)
-	// 5) Network scoring.
-	return c.networkScore.Score(t, nodes, resourceScores, scoreCtx)
+
+	// 5) Network scoring (skippable for network-off evaluation baselines).
+	scores := resourceScores
+	if scoreCtx == nil || !scoreCtx.DisableNetworkScore {
+		scores = c.networkScore.Score(t, nodes, resourceScores, scoreCtx)
+	}
+
+	// 6) Energy scoring (skippable for energy-off evaluation baselines).
+	if scoreCtx != nil && scoreCtx.DisableEnergyScore {
+		return scores
+	}
+	return applyEnergyAwareScore(t, nodes, scores, scoreCtx)
 }
 
 func (c *ComposableScheduler) Pick(scores map[string]float64, candidates []*node.Node) *node.Node {
 	if c == nil {
 		return nil
 	}
-	// 6) Final selection.
+	// 7) Final selection.
 	return c.finalSelect.Pick(scores, candidates)
 }
 

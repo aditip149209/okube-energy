@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aditip149209/okube/pkg/carbon"
 	"github.com/aditip149209/okube/pkg/manifest"
 	"github.com/aditip149209/okube/pkg/node"
 	"github.com/aditip149209/okube/pkg/scheduler"
@@ -75,6 +76,23 @@ type Config struct {
 	ID                      string
 	AdvertiseAddr           string
 	WorkerClient            WorkerCommunicator
+
+	// NetworkWeight, ResourceWeight, and EnergyWeight tune how much each
+	// signal contributes to the fused placement score; nil means "use the
+	// scheduler package default". DisableNetworkScore / DisableEnergyScore
+	// skip the corresponding stage entirely, which is what isolated
+	// evaluation baselines (default / network-only / energy-only / fused)
+	// need.
+	NetworkWeight       *float64
+	ResourceWeight      *float64
+	EnergyWeight        *float64
+	DisableNetworkScore bool
+	DisableEnergyScore  bool
+
+	// CarbonIntensityFile is an optional path to a JSON file (see
+	// pkg/carbon) mapping worker ID/address to a carbon intensity value.
+	// This is a placeholder for a live carbon intensity API.
+	CarbonIntensityFile string
 }
 
 type Manager struct {
@@ -95,6 +113,13 @@ type Manager struct {
 	taskWatchStop       context.CancelFunc
 	topologyUpdater     *topology.Updater
 	topologyUpdaterStop context.CancelFunc
+
+	networkWeight       *float64
+	resourceWeight      *float64
+	energyWeight        *float64
+	disableNetworkScore bool
+	disableEnergyScore  bool
+	carbonIntensity     *carbon.Intensity
 }
 
 func (m *Manager) startLeaderElection() {
@@ -601,6 +626,7 @@ func (m *Manager) SelectWorker(ctx context.Context, t task.Task) (*store.Worker,
 	for _, w := range workers {
 		workerMap[w.ID] = w
 		n := node.NewNode(w.ID, w.Address, "worker")
+		n.CarbonIntensity = m.carbonIntensity.For(w.ID, w.Address)
 		nodes = append(nodes, n)
 	}
 
@@ -611,9 +637,12 @@ func (m *Manager) SelectWorker(ctx context.Context, t task.Task) (*store.Worker,
 	}
 
 	scoreCtx := &scheduler.ScoreContext{
-		Filter:         filterCtx,
-		NetworkWeight:  0.7,
-		ResourceWeight: 0.3,
+		Filter:              filterCtx,
+		NetworkWeight:       m.networkWeight,
+		ResourceWeight:      m.resourceWeight,
+		EnergyWeight:        m.energyWeight,
+		DisableNetworkScore: m.disableNetworkScore,
+		DisableEnergyScore:  m.disableEnergyScore,
 	}
 	scores := m.Scheduler.Score(t, candidates, scoreCtx)
 	selectedNode := m.Scheduler.Pick(scores, candidates)
@@ -1012,6 +1041,16 @@ func NewWithConfig(cfg Config) *Manager {
 		probeSampleSize = 2
 	}
 
+	var carbonIntensity *carbon.Intensity
+	if cfg.CarbonIntensityFile != "" {
+		loaded, err := carbon.Load(cfg.CarbonIntensityFile)
+		if err != nil {
+			log.Printf("Warning: could not load carbon intensity file %q: %v. Falling back to the scheduler's default carbon intensity.", cfg.CarbonIntensityFile, err)
+		} else {
+			carbonIntensity = loaded
+		}
+	}
+
 	wc := cfg.WorkerClient
 	if wc == nil {
 		wc = NewHTTPWorkerClient(nil)
@@ -1020,14 +1059,20 @@ func NewWithConfig(cfg Config) *Manager {
 	initialWorkers := append([]string(nil), cfg.Workers...)
 
 	m := &Manager{
-		ID:             id,
-		Pending:        *queue.New(),
-		Scheduler:      s,
-		WorkerClient:   wc,
-		Store:          cfg.Store,
-		AdvertiseAddr:  advertiseAddr,
-		initialWorkers: initialWorkers,
-		electionStop:   make(chan struct{}),
+		ID:                  id,
+		Pending:             *queue.New(),
+		Scheduler:           s,
+		WorkerClient:        wc,
+		Store:               cfg.Store,
+		AdvertiseAddr:       advertiseAddr,
+		initialWorkers:      initialWorkers,
+		electionStop:        make(chan struct{}),
+		networkWeight:       cfg.NetworkWeight,
+		resourceWeight:      cfg.ResourceWeight,
+		energyWeight:        cfg.EnergyWeight,
+		disableNetworkScore: cfg.DisableNetworkScore,
+		disableEnergyScore:  cfg.DisableEnergyScore,
+		carbonIntensity:     carbonIntensity,
 	}
 
 	if m.Store != nil {

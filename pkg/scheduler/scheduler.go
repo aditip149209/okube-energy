@@ -31,12 +31,23 @@ type FilterContext struct {
 	DependencyNodeByService map[string]string
 }
 
-// ScoreContext carries optional metadata and weights for combining network
-// and resource costs.
+// ScoreContext carries optional metadata and weights for combining network,
+// resource, and energy costs.
+//
+// Weight fields are pointers so an explicit 0 (e.g. to run a network-only or
+// energy-only baseline) is distinguishable from "not provided" and can
+// override the package defaults; a nil field falls back to the default.
+// DisableNetworkScore / DisableEnergyScore skip the corresponding scoring
+// stage entirely, which is what the "default scheduler" and single-signal
+// evaluation baselines need instead of relying on the score's math to cancel
+// out at weight 0.
 type ScoreContext struct {
-	Filter         *FilterContext
-	NetworkWeight  float64
-	ResourceWeight float64
+	Filter              *FilterContext
+	NetworkWeight       *float64
+	ResourceWeight      *float64
+	EnergyWeight        *float64
+	DisableNetworkScore bool
+	DisableEnergyScore  bool
 }
 
 type RoundRobin struct {

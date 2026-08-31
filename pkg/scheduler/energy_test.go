@@ -1,0 +1,75 @@
+package scheduler
+
+import (
+	"testing"
+
+	"github.com/aditip149209/okube/pkg/node"
+	"github.com/aditip149209/okube/pkg/task"
+)
+
+func TestApplyEnergyAwareScorePrefersLowerEnergyNode(t *testing.T) {
+	baseScores := map[string]float64{
+		"node-a": 1.0,
+		"node-b": 1.0,
+	}
+
+	nodes := []*node.Node{
+		{Name: "node-a", TaskCount: 5, Memory: 16000, MemoryAllocated: 12000, CarbonIntensity: 0.8},
+		{Name: "node-b", TaskCount: 1, Memory: 16000, MemoryAllocated: 3000, CarbonIntensity: 0.2},
+	}
+
+	weight := 0.8
+	scores := applyEnergyAwareScore(task.Task{Flexible: true}, nodes, baseScores, &ScoreContext{EnergyWeight: &weight})
+	if scores["node-a"] <= scores["node-b"] {
+		t.Fatalf("expected lower-energy node to win, got node-a=%v node-b=%v", scores["node-a"], scores["node-b"])
+	}
+}
+
+func TestApplyEnergyAwareScoreReducesWeightForCriticalJobs(t *testing.T) {
+	baseScores := map[string]float64{
+		"node-a": 1.0,
+		"node-b": 1.0,
+	}
+
+	nodes := []*node.Node{
+		{Name: "node-a", TaskCount: 3, Memory: 16000, MemoryAllocated: 8000, CarbonIntensity: 0.8},
+		{Name: "node-b", TaskCount: 1, Memory: 16000, MemoryAllocated: 4000, CarbonIntensity: 0.2},
+	}
+
+	weight := 0.8
+	scores := applyEnergyAwareScore(task.Task{Criticality: "critical"}, nodes, baseScores, &ScoreContext{EnergyWeight: &weight})
+	if scores["node-a"] <= scores["node-b"] {
+		t.Fatalf("expected critical jobs to avoid over-weighting energy, got node-a=%v node-b=%v", scores["node-a"], scores["node-b"])
+	}
+}
+
+// Regression test: an explicit EnergyWeight of 0 must actually zero out the
+// energy contribution. Before the pointer fix, resolveEnergyWeight checked
+// "> 0" so 0 was indistinguishable from "not set" and silently fell back to
+// defaultEnergyWeight (0.2).
+func TestApplyEnergyAwareScoreZeroWeightDisablesEnergyContribution(t *testing.T) {
+	baseScores := map[string]float64{
+		"node-a": 1.0,
+		"node-b": 2.0,
+	}
+	nodes := []*node.Node{
+		{Name: "node-a", CarbonIntensity: 0.9},
+		{Name: "node-b", CarbonIntensity: 0.1},
+	}
+
+	zero := 0.0
+	scores := applyEnergyAwareScore(task.Task{}, nodes, baseScores, &ScoreContext{EnergyWeight: &zero})
+	if scores["node-a"] != baseScores["node-a"] || scores["node-b"] != baseScores["node-b"] {
+		t.Fatalf("expected zero energy weight to leave base scores unchanged, got node-a=%v node-b=%v",
+			scores["node-a"], scores["node-b"])
+	}
+}
+
+func TestResolveEnergyWeightNilFallsBackToDefault(t *testing.T) {
+	if w := resolveEnergyWeight(nil, &task.Task{}); w != defaultEnergyWeight {
+		t.Fatalf("expected nil ScoreContext to fall back to default weight %v, got %v", defaultEnergyWeight, w)
+	}
+	if w := resolveEnergyWeight(&ScoreContext{}, &task.Task{}); w != defaultEnergyWeight {
+		t.Fatalf("expected unset EnergyWeight to fall back to default weight %v, got %v", defaultEnergyWeight, w)
+	}
+}

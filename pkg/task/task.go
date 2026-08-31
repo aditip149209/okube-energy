@@ -73,10 +73,14 @@ type Task struct {
 	// question is - how reliable is this url, i.e. will this really tell us if this task is healthy or not?
 	//if the developer wrote a bad health check, then our manager will not make good decisions
 	//the manager relies completely on the url, and the url is only as smart as the dev who wrote it.
-	RestartCount int
-	Env          []string `json:"env,omitempty"`
-	Volumes      []string `json:"volumes,omitempty"`
-	Command      []string `json:"command,omitempty"`
+	RestartCount      int
+	Env               []string  `json:"env,omitempty"`
+	Volumes           []string  `json:"volumes,omitempty"`
+	Command           []string  `json:"command,omitempty"`
+	Criticality       string    `json:"criticality,omitempty"`
+	Flexible          bool      `json:"flexible,omitempty"`
+	EstimatedDuration int       `json:"estimated_duration,omitempty"`
+	Deadline          time.Time `json:"deadline,omitempty"`
 }
 
 type TaskEvent struct {
