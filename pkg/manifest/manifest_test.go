@@ -28,3 +28,22 @@ services:
 		t.Fatalf("expected deadline %v, got %v", want, got.Deadline)
 	}
 }
+
+func TestToTasksCarriesFractionalCPU(t *testing.T) {
+	m, err := ParseManifest([]byte(`
+name: demo
+services:
+  web:
+    image: nginx
+    resources:
+      cpu: 0.5
+      memory: 268435456
+`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	got := ToTasks(m, "demo")["web"]
+	if got.Cpu != 0.5 || got.Memory != 268435456 {
+		t.Fatalf("expected cpu 0.5 / memory 268435456, got %v / %v", got.Cpu, got.Memory)
+	}
+}

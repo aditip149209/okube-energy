@@ -130,6 +130,7 @@ func ToTasks(m *Manifest, appID string) map[string]*task.Task {
 			State:        task.Pending,
 			Image:        svc.Image,
 			Memory:       int(svc.Resources.Memory),
+			Cpu:          svc.Resources.CPU,
 			Disk:         int(svc.Resources.Disk),
 			ExposedPorts: exposedPorts,
 			PortBindings: portBindings,
