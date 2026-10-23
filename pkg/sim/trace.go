@@ -58,11 +58,16 @@ type TraceParams struct {
 
 // DefaultTraceParams returns the base experiment's workload: 60 deployments,
 // a mix leaning towards flexible work so the energy term has room to act.
+//
+// The arrival rate targets roughly 35% average utilisation of the built-in
+// scenario (an average deployment is ~1,300 core-seconds against 48 cores). At
+// much higher load nodes are nearly full, only one or two have room for each
+// task, and the scheduler has no real placement choice to make.
 func DefaultTraceParams() TraceParams {
 	return TraceParams{
 		Seed:             42,
 		Instances:        60,
-		MeanInterarrival: 30,
+		MeanInterarrival: 75,
 		Mix:              ClassMix{Critical: 0.2, Flexible: 0.4, Default: 0.4},
 		MinDurationSec:   60,
 		MaxDurationSec:   600,
@@ -70,6 +75,15 @@ func DefaultTraceParams() TraceParams {
 		DefaultSlack:     3,
 		FlexibleSlack:    6,
 	}
+}
+
+// StressTraceParams is the base workload arriving about 2.5x faster, which
+// saturates the built-in scenario. It exists to study queueing and deadline
+// violations, where placement freedom is deliberately scarce.
+func StressTraceParams() TraceParams {
+	p := DefaultTraceParams()
+	p.MeanInterarrival = 30
+	return p
 }
 
 var (
