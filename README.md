@@ -30,19 +30,22 @@ Okube is a container orchestration system that manages containerized workloads a
 
 ```
 okube/
-├── cmd/
-│   └── cli/              # Command-line interface
-│       ├── main.go       # CLI entry point
-│       ├── run.go        # Run command implementation
-│       └── apply.go      # Apply command implementation
+├── cmd/                   # Cobra CLI commands (single binary)
+│   ├── root.go            # Root command, --manager flag
+│   ├── manager.go         # `okube manager` — start a manager node
+│   ├── worker.go          # `okube worker` — start a worker node
+│   └── cli.go             # `okube run/stop/status/nodes/deploy/apps/delete`
 ├── pkg/
-│   ├── manager/          # Manager component
-│   ├── worker/           # Worker component
-│   ├── scheduler/        # Scheduling logic
-│   ├── task/             # Task definitions and Docker operations
-│   └── node/             # Node representation
-├── main.go               # Main application entry point
-└── go.mod                # Go module dependencies
+│   ├── manager/           # Manager component
+│   ├── worker/            # Worker component
+│   ├── scheduler/         # Scheduling logic (roundrobin, epvm)
+│   ├── manifest/          # Multi-service YAML manifest parsing
+│   ├── appgroup/          # Service dependency graph
+│   ├── task/              # Task definitions and Docker operations
+│   ├── store/             # etcd-backed cluster state
+│   └── node/               # Node representation
+├── main.go                # Application entry point
+└── go.mod                 # Go module dependencies
 ```
 
 ## Installation
@@ -51,6 +54,7 @@ okube/
 
 - Go 1.25.3 or higher
 - Docker installed and running
+- etcd (used as the manager's cluster store)
 - Linux operating system (recommended)
 
 ### Build from Source
@@ -63,43 +67,56 @@ cd okube
 # Install dependencies
 go mod download
 
-# Build the binary
-go build -o okube main.go
-
-# Build the CLI
-go build -o okube-cli cmd/cli/main.go
+# Build the binary (includes the manager, worker, and CLI commands)
+go build -o okube .
 ```
 
 ## Usage
 
-### Starting the Orchestrator
+### Starting a Manager
 
-Run the main orchestrator:
+An etcd instance must be reachable first (defaults to `localhost:2379`).
 
 ```bash
-./okube
+./okube manager --host 0.0.0.0 --port 5556 --etcd-endpoints localhost:2379 --scheduler epvm
+```
+
+Key manager flags:
+- `--scheduler`: `roundrobin` or `epvm` (network/energy-aware)
+- `--network-weight`, `--resource-weight`, `--energy-weight`: fused scoring weights (epvm scheduler)
+- `--carbon-intensity-file`: path to a JSON file mapping worker ID/address to carbon intensity (see [carbon_intensity.json](carbon_intensity.json))
+- `--disable-network-score`, `--disable-energy-score`: baseline evaluation runs
+
+### Starting a Worker
+
+```bash
+./okube worker --port 5557 --name worker-1 --manager-host localhost --manager-port 5556
 ```
 
 ### Using the CLI
 
-The CLI provides commands to interact with the cluster:
+All CLI commands accept `-m/--manager` (comma-separated `host:port`, defaults to `localhost:5556`).
 
-#### Run a Container
-
-Start a new task on the cluster:
+#### Submit a Task
 
 ```bash
-./okube-cli run --image nginx --replicas 3
+./okube run -f task1.json
 ```
 
-Options:
-- `-i, --image`: Container image to run (required)
-- `-r, --replicas`: Number of replicas to start (default: 1)
-
-#### Apply Configuration
+#### Deploy a Multi-Service Application
 
 ```bash
-./okube-cli apply
+./okube deploy -f manifest.yaml
+./okube apps
+./okube delete demo-app
+```
+
+#### Inspect the Cluster
+
+```bash
+./okube status   # manager role/leader + all tasks
+./okube nodes     # registered worker nodes
+./okube stop <task-id>
 ```
 
 ## API Reference
