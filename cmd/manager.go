@@ -86,7 +86,7 @@ func init() {
 	rootCmd.AddCommand(managerCmd)
 	managerCmd.Flags().StringP("host", "H", "0.0.0.0", "Hostname or IP address to bind to")
 	managerCmd.Flags().IntP("port", "p", 5556, "Port on which to listen")
-	managerCmd.Flags().String("scheduler", "roundrobin", "Scheduler type (roundrobin or epvm)")
+	managerCmd.Flags().String("scheduler", "roundrobin", "Scheduler type (roundrobin, epvm or leastloaded)")
 	managerCmd.Flags().String("queue-sort", "kahn", "Queue sort strategy (kahn, reversekahn, alternatekahn)")
 	managerCmd.Flags().String("topology-probe-mode", "full-mesh", "Topology probe mode (full-mesh or sampled)")
 	managerCmd.Flags().Duration("topology-probe-interval", 30*time.Second, "Interval between topology probe updates")
