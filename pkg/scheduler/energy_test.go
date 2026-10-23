@@ -73,3 +73,33 @@ func TestResolveEnergyWeightNilFallsBackToDefault(t *testing.T) {
 		t.Fatalf("expected unset EnergyWeight to fall back to default weight %v, got %v", defaultEnergyWeight, w)
 	}
 }
+
+// The energy term must have the same effective influence whether the incoming
+// scores are on the 0-100 network scale or the raw 0.1/1.0 round-robin scale.
+func TestApplyEnergyAwareScoreInfluenceIsScaleInvariant(t *testing.T) {
+	nodes := []*node.Node{
+		{Name: "node-a", CarbonIntensity: 0.8},
+		{Name: "node-b", CarbonIntensity: 0.2},
+	}
+	weight := 0.5
+
+	rawScale := applyEnergyAwareScore(task.Task{}, nodes, map[string]float64{"node-a": 0.1, "node-b": 1.0}, &ScoreContext{EnergyWeight: &weight})
+	netScale := applyEnergyAwareScore(task.Task{}, nodes, map[string]float64{"node-a": 0, "node-b": 100}, &ScoreContext{EnergyWeight: &weight})
+
+	for _, name := range []string{"node-a", "node-b"} {
+		if d := rawScale[name] - netScale[name]; d > 1e-9 || d < -1e-9 {
+			t.Fatalf("expected scale-invariant scores for %s, got raw=%v net=%v", name, rawScale[name], netScale[name])
+		}
+	}
+}
+
+func TestApplyEnergyAwareScoreEqualCarbonKeepsBaseRanking(t *testing.T) {
+	nodes := []*node.Node{
+		{Name: "node-a", CarbonIntensity: 0.5},
+		{Name: "node-b", CarbonIntensity: 0.5},
+	}
+	scores := applyEnergyAwareScore(task.Task{Flexible: true}, nodes, map[string]float64{"node-a": 10, "node-b": 40}, nil)
+	if scores["node-a"] >= scores["node-b"] {
+		t.Fatalf("expected equal-carbon nodes to keep base ranking, got node-a=%v node-b=%v", scores["node-a"], scores["node-b"])
+	}
+}

@@ -11,23 +11,47 @@ const (
 	defaultEnergyWeight = 0.2
 )
 
+// applyEnergyAwareScore adds a carbon-weighted energy cost to the scores
+// produced so far. Both the incoming scores and the raw energy costs are
+// min-max normalised to 0-100 across the candidate set first: the network
+// stage already emits 0-100 scores, but with no topology data the scores are
+// raw resource costs (e.g. 0.1/1.0 for round-robin), so without this the
+// effective energy weight would depend on which signals happened to be present.
+// A zero weight returns the incoming scores untouched so a network-only
+// baseline stays exact.
 func applyEnergyAwareScore(t task.Task, nodes []*node.Node, baseScores map[string]float64, scoreCtx *ScoreContext) map[string]float64 {
 	if len(nodes) == 0 || len(baseScores) == 0 {
 		return baseScores
 	}
 
-	final := make(map[string]float64, len(baseScores))
 	energyWeight := resolveEnergyWeight(scoreCtx, &t)
+	if energyWeight == 0 {
+		return baseScores
+	}
+
+	energyCosts := make(map[string]float64, len(nodes))
+	cleanBase := make(map[string]float64, len(baseScores))
 	for _, n := range nodes {
 		if n == nil {
 			continue
 		}
-		energyCost := estimateNodeEnergyCost(n, &t)
+		energyCosts[n.Name] = estimateNodeEnergyCost(n, &t)
 		base := baseScores[n.Name]
 		if math.IsNaN(base) || math.IsInf(base, 0) {
 			base = 1e9
 		}
-		final[n.Name] = base + (energyWeight * energyCost)
+		cleanBase[n.Name] = base
+	}
+
+	normBase := normalizeScores(nodes, cleanBase)
+	normEnergy := normalizeScores(nodes, energyCosts)
+
+	final := make(map[string]float64, len(baseScores))
+	for _, n := range nodes {
+		if n == nil {
+			continue
+		}
+		final[n.Name] = normBase[n.Name] + energyWeight*normEnergy[n.Name]
 	}
 	return final
 }
