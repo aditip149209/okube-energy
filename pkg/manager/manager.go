@@ -621,12 +621,17 @@ func (m *Manager) SelectWorker(ctx context.Context, t task.Task) (*store.Worker,
 		return nil, err
 	}
 
+	// Running/scheduled task counts per worker feed the energy stage's load
+	// factor; without them every freshly built node looks idle.
+	taskCounts := m.activeTaskCounts(ctx)
+
 	workerMap := make(map[string]store.Worker)
 	nodes := make([]*node.Node, 0, len(workers))
 	for _, w := range workers {
 		workerMap[w.ID] = w
 		n := node.NewNode(w.ID, w.Address, "worker")
 		n.CarbonIntensity = m.carbonIntensity.For(w.ID, w.Address)
+		n.TaskCount = taskCounts[w.ID]
 		nodes = append(nodes, n)
 	}
 
@@ -657,6 +662,28 @@ func (m *Manager) SelectWorker(ctx context.Context, t task.Task) (*store.Worker,
 
 	return &selectedWorker, nil
 
+}
+
+// activeTaskCounts returns the number of running or scheduled tasks per worker
+// ID. A store failure is logged and yields an empty map so scheduling degrades
+// to "all nodes idle" rather than failing.
+func (m *Manager) activeTaskCounts(ctx context.Context) map[string]int {
+	counts := make(map[string]int)
+	records, err := m.Store.ListTasks(ctx)
+	if err != nil {
+		log.Printf("Manager %s: failed to list tasks for node load: %v", m.ID, err)
+		return counts
+	}
+	for _, rec := range records {
+		if rec.Task == nil || rec.WorkerID == "" {
+			continue
+		}
+		if rec.Task.State != task.Running && rec.Task.State != task.Scheduled {
+			continue
+		}
+		counts[rec.WorkerID]++
+	}
+	return counts
 }
 
 func (m *Manager) buildFilterContext(ctx context.Context, t task.Task) *scheduler.FilterContext {
