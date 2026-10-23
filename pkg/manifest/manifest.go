@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aditip149209/okube/pkg/appgroup"
 	"github.com/aditip149209/okube/pkg/task"
@@ -29,6 +30,14 @@ type ServiceSpec struct {
 	HealthCheck string            `yaml:"healthCheck,omitempty" json:"healthCheck,omitempty"`
 	Command     []string          `yaml:"command,omitempty" json:"command,omitempty"`
 	Resources   ServiceResources  `yaml:"resources,omitempty" json:"resources,omitempty"`
+
+	// Energy-aware scheduling metadata. Criticality is "critical", "urgent" or
+	// empty; Flexible marks time-shiftable work; EstimatedDuration is seconds;
+	// Deadline is RFC 3339.
+	Criticality       string    `yaml:"criticality,omitempty" json:"criticality,omitempty"`
+	Flexible          bool      `yaml:"flexible,omitempty" json:"flexible,omitempty"`
+	EstimatedDuration int       `yaml:"estimatedDuration,omitempty" json:"estimatedDuration,omitempty"`
+	Deadline          time.Time `yaml:"deadline,omitempty" json:"deadline,omitempty"`
 }
 
 // Manifest is a declarative multi-service application definition.
@@ -128,6 +137,11 @@ func ToTasks(m *Manifest, appID string) map[string]*task.Task {
 			Env:          envSlice,
 			Volumes:      svc.Volumes,
 			Command:      svc.Command,
+
+			Criticality:       svc.Criticality,
+			Flexible:          svc.Flexible,
+			EstimatedDuration: svc.EstimatedDuration,
+			Deadline:          svc.Deadline,
 		}
 
 		tasks[name] = t
