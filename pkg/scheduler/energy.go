@@ -80,11 +80,12 @@ func estimateNodeEnergyCost(n *node.Node, t *task.Task) float64 {
 	}
 	loadFactor := 1.0
 	if t != nil {
+		// Task memory is in bytes (Docker), node memory in KB (/proc/meminfo).
 		if t.Memory > 0 && n.Memory > 0 {
-			loadFactor += float64(t.Memory) / float64(n.Memory)
+			loadFactor += (float64(t.Memory) / 1024) / float64(n.Memory)
 		}
 		if t.Cpu > 0 && n.Cores > 0 {
-			loadFactor += float64(t.Cpu) / float64(n.Cores)
+			loadFactor += t.Cpu / float64(n.Cores)
 		}
 	}
 	if n.TaskCount > 0 {

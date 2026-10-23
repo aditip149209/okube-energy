@@ -103,3 +103,20 @@ func TestApplyEnergyAwareScoreEqualCarbonKeepsBaseRanking(t *testing.T) {
 		t.Fatalf("expected equal-carbon nodes to keep base ranking, got node-a=%v node-b=%v", scores["node-a"], scores["node-b"])
 	}
 }
+
+// Task memory is bytes, node memory is KB: a task using 1 GiB on a 4 GiB node
+// must add 0.25 to the load factor, not ~0.
+func TestEstimateNodeEnergyCostConvertsMemoryUnits(t *testing.T) {
+	n := &node.Node{Name: "n", Memory: 4 * 1024 * 1024, Cores: 4, CarbonIntensity: 1.0}
+
+	idle := estimateNodeEnergyCost(n, &task.Task{})
+	loaded := estimateNodeEnergyCost(n, &task.Task{Memory: 1 << 30, Cpu: 2})
+
+	// load = 1 + 0.25 (mem) + 0.5 (cpu); cost = carbon*load*10
+	if want := 10.0; idle != want {
+		t.Fatalf("expected idle cost %v, got %v", want, idle)
+	}
+	if want := 17.5; loaded != want {
+		t.Fatalf("expected loaded cost %v, got %v", want, loaded)
+	}
+}
