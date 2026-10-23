@@ -57,6 +57,8 @@ func NewPipelineScheduler(schedulerType, queueSortStrategy string) Scheduler {
 	case "epvm":
 		resourceFilter = epvmResourceFilter{}
 		resourceScore = epvmResourceScorer{}
+	case "leastloaded":
+		resourceScore = leastLoadedResourceScorer{}
 	}
 
 	return &ComposableScheduler{
@@ -168,6 +170,27 @@ func (r *roundRobinResourceScorer) Score(t task.Task, nodes []*node.Node) map[st
 		}
 	}
 	return nodeScores
+}
+
+// leastLoadedResourceScorer is a deterministic, offline resource scorer: the
+// fewer tasks and the less allocated memory a node has, the lower (better) its
+// cost. Unlike round-robin its score depends only on node load, not on call
+// order, and unlike EPVM it needs no live worker stats.
+type leastLoadedResourceScorer struct{}
+
+func (leastLoadedResourceScorer) Score(t task.Task, nodes []*node.Node) map[string]float64 {
+	scores := make(map[string]float64, len(nodes))
+	for _, n := range nodes {
+		if n == nil {
+			continue
+		}
+		cost := float64(n.TaskCount)
+		if n.Memory > 0 {
+			cost += float64(n.MemoryAllocated) / float64(n.Memory)
+		}
+		scores[n.Name] = cost
+	}
+	return scores
 }
 
 type epvmResourceScorer struct{}

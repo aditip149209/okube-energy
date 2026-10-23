@@ -50,3 +50,19 @@ func TestComposableSchedulerEnergyScoreEnabledByDefault(t *testing.T) {
 		}
 	}
 }
+
+func TestLeastLoadedScorerIsDeterministicAndPrefersIdleNodes(t *testing.T) {
+	nodes := []*node.Node{
+		{Name: "busy", TaskCount: 4},
+		{Name: "idle", TaskCount: 0},
+		{Name: "mid", TaskCount: 2},
+	}
+	s := NewPipelineScheduler("leastloaded", "")
+
+	for i := 0; i < 3; i++ {
+		scores := s.Score(task.Task{}, nodes, &ScoreContext{DisableEnergyScore: true})
+		if got := s.Pick(scores, nodes).Name; got != "idle" {
+			t.Fatalf("call %d: expected idle node, got %s (scores=%v)", i, got, scores)
+		}
+	}
+}
