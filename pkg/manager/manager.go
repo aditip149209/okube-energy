@@ -641,6 +641,10 @@ func (m *Manager) SelectWorker(ctx context.Context, t task.Task) (*store.Worker,
 		return nil, fmt.Errorf("no available candidates match resource request for task %v", t.ID)
 	}
 
+	if !m.disableEnergyScore {
+		populateNodeCapacity(candidates)
+	}
+
 	scoreCtx := &scheduler.ScoreContext{
 		Filter:              filterCtx,
 		NetworkWeight:       m.networkWeight,
@@ -662,6 +666,18 @@ func (m *Manager) SelectWorker(ctx context.Context, t task.Task) (*store.Worker,
 
 	return &selectedWorker, nil
 
+}
+
+// populateNodeCapacity fills Cores and Memory on the candidates from each
+// worker's /stats so the energy stage's load factor reflects real capacity.
+// It is best effort: a node whose stats can't be fetched keeps zero capacity
+// and the load factor falls back to the task-count term alone.
+func populateNodeCapacity(nodes []*node.Node) {
+	for _, n := range nodes {
+		if _, err := n.GetNodeStats(); err != nil {
+			log.Printf("Warning: could not read capacity for node %s: %v. Energy load factor will ignore it.", n.Name, err)
+		}
+	}
 }
 
 // activeTaskCounts returns the number of running or scheduled tasks per worker
