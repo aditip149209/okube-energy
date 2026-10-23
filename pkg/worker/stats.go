@@ -2,6 +2,7 @@ package worker
 
 import (
 	"log"
+	"runtime"
 
 	"github.com/c9s/goprocinfo/linux"
 )
@@ -12,6 +13,7 @@ type Stats struct {
 	CpuStats  *linux.CPUStat
 	LoadStats *linux.LoadAvg
 	Taskcount int
+	Cores     int
 }
 
 func (s *Stats) MemTotalKb() uint64 {
@@ -60,6 +62,7 @@ func GetStats() *Stats {
 		DiskStats: GetDiskInfo(),
 		CpuStats:  GetCpuStats(),
 		LoadStats: GetLoadAvg(),
+		Cores:     runtime.NumCPU(),
 	}
 }
 

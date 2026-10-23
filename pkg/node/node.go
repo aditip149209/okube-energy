@@ -111,6 +111,9 @@ func (n *Node) GetNodeStats() (*worker.Stats, error) {
 	}
 
 	n.Memory = int64(stats.MemTotalKb())
+	if stats.Cores > 0 {
+		n.Cores = stats.Cores
+	}
 	n.Disk = int64(stats.DiskTotal())
 
 	n.Stats = stats

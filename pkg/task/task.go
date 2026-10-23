@@ -61,7 +61,7 @@ type Task struct {
 	Image         string
 	Memory        int
 	Disk          int
-	Cpu           int
+	Cpu           float64 // requested cores; fractional values allowed
 	ContainerID   string
 	ExposedPorts  nat.PortSet
 	PortBindings  map[string]string
