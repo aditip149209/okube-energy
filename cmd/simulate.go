@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/aditip149209/okube/pkg/power"
 	"github.com/aditip149209/okube/pkg/sim"
 	"github.com/spf13/cobra"
 )
@@ -29,6 +30,22 @@ Results are written as CSV files to --out and a summary is printed:
 		seeds, _ := cmd.Flags().GetInt("seeds")
 		workloadNames, _ := cmd.Flags().GetStringSlice("workloads")
 		sweep, _ := cmd.Flags().GetFloat64Slice("sweep")
+		curvesPath, _ := cmd.Flags().GetString("power-curves")
+
+		scenario := sim.DefaultScenario()
+		if curvesPath != "" {
+			curves, err := power.Load(curvesPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			curve, ok := curves[sim.DefaultNodeType]
+			if !ok {
+				fmt.Fprintf(os.Stderr, "Error: %s has no node type %q\n", curvesPath, sim.DefaultNodeType)
+				os.Exit(1)
+			}
+			scenario = sim.BuildDefaultScenario(curve)
+		}
 
 		available := map[string]sim.TraceParams{
 			"default": sim.DefaultTraceParams(),
@@ -44,7 +61,7 @@ Results are written as CSV files to --out and a summary is printed:
 			opts.Workloads = append(opts.Workloads, sim.Workload{Name: name, Params: params})
 		}
 
-		rows, err := sim.RunExperiment(sim.DefaultScenario(), opts)
+		rows, err := sim.RunExperiment(scenario, opts)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -89,5 +106,6 @@ func init() {
 	simulateCmd.Flags().String("out", "sim-results", "Directory to write the CSV results to")
 	simulateCmd.Flags().Int("seeds", 20, "Number of seeds (independent traces) per workload")
 	simulateCmd.Flags().StringSlice("workloads", []string{"default", "stress"}, "Workloads to run: default (~35% load) and/or stress (saturating)")
+	simulateCmd.Flags().String("power-curves", "", "power_curves.json from models/train_power_model.py (default: curves embedded in the binary)")
 	simulateCmd.Flags().Float64Slice("sweep", []float64{0, 0.1, 0.2, 0.5, 1, 2, 5}, "Energy weights for the energy-only and fused sweep")
 }
