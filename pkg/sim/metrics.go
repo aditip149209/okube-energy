@@ -22,10 +22,11 @@ type Summary struct {
 	Tasks       int
 	MakespanSec float64
 
-	// Energy and CO2. Dynamic is the part the scheduler can influence: with a
-	// linear power model it is (max-idle) * cpu/cores * duration per task. Idle
-	// is every node's idle draw over the makespan, which no placement avoids,
-	// so TotalCO2G mostly dilutes the differences between configs.
+	// Energy and CO2. Dynamic is the part the scheduler can influence: each
+	// node's power above idle, integrated over time from its utilisation, and
+	// shared among the tasks running on it by CPU. Idle is every node's idle
+	// draw over the makespan, which no placement avoids, so TotalCO2G mostly
+	// dilutes the differences between configs.
 	DynamicEnergyKWh float64
 	IdleEnergyKWh    float64
 	DynamicCO2G      float64
@@ -58,14 +59,16 @@ func Summarize(s *Scenario, res *Result) Summary {
 		ByClass:      map[Class]ClassStats{},
 	}
 
+	dynamicKWh := taskDynamicEnergyKWh(s, res.Placements)
+
 	var latencies, decisionsUS []float64
 	var latencySum, waitSum, decisionSumUS float64
 	intensitySum := map[Class]float64{}
 
-	for _, p := range res.Placements {
+	for i, p := range res.Placements {
 		spec, _ := s.Node(p.Node)
 
-		dynKWh := (spec.MaxWatts - spec.IdleWatts) * (p.Task.CPU / float64(spec.Cores)) * p.Task.DurationSec / joulesPerKWh
+		dynKWh := dynamicKWh[i]
 		dynG := dynKWh * spec.CarbonGPerKWh
 		sum.DynamicEnergyKWh += dynKWh
 		sum.DynamicCO2G += dynG
@@ -98,7 +101,7 @@ func Summarize(s *Scenario, res *Result) Summary {
 	}
 
 	for _, n := range s.Nodes {
-		idleKWh := n.IdleWatts * res.MakespanSec / joulesPerKWh
+		idleKWh := n.Power.Idle() * res.MakespanSec / joulesPerKWh
 		sum.IdleEnergyKWh += idleKWh
 		sum.IdleCO2G += idleKWh * n.CarbonGPerKWh
 	}
@@ -135,4 +138,53 @@ func percentile(values []float64, p float64) float64 {
 		rank = 0
 	}
 	return sorted[rank]
+}
+
+// taskDynamicEnergyKWh returns, for each placement, its share of its node's
+// dynamic energy (power above idle). Utilisation is piecewise constant between
+// task starts and ends, so each node's dynamic power is read off its curve in
+// every such interval and split among the tasks active then, by CPU request.
+// Because the curve is not linear the split is an attribution convention; the
+// per-node total is exact.
+func taskDynamicEnergyKWh(s *Scenario, placements []Placement) []float64 {
+	energy := make([]float64, len(placements))
+
+	byNode := map[string][]int{}
+	for i, p := range placements {
+		byNode[p.Node] = append(byNode[p.Node], i)
+	}
+
+	for name, idxs := range byNode {
+		spec, _ := s.Node(name)
+
+		points := make([]float64, 0, 2*len(idxs))
+		for _, i := range idxs {
+			points = append(points, placements[i].StartSec, placements[i].EndSec)
+		}
+		sort.Float64s(points)
+
+		for k := 0; k+1 < len(points); k++ {
+			from, to := points[k], points[k+1]
+			if to <= from {
+				continue
+			}
+			var active []int
+			var cpu float64
+			for _, i := range idxs {
+				if placements[i].StartSec <= from && placements[i].EndSec > from {
+					active = append(active, i)
+					cpu += placements[i].Task.CPU
+				}
+			}
+			if len(active) == 0 || cpu <= 0 {
+				continue
+			}
+			dynW := spec.Power.At(cpu/float64(spec.Cores)) - spec.Power.Idle()
+			intervalWs := dynW * (to - from)
+			for _, i := range active {
+				energy[i] += intervalWs * placements[i].Task.CPU / cpu / joulesPerKWh
+			}
+		}
+	}
+	return energy
 }

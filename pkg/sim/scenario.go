@@ -9,6 +9,7 @@ import (
 	"math"
 
 	"github.com/aditip149209/okube/pkg/appgroup"
+	"github.com/aditip149209/okube/pkg/power"
 	"github.com/aditip149209/okube/pkg/topology"
 )
 
@@ -24,10 +25,8 @@ type NodeSpec struct {
 	// factor is derived via CarbonFactor.
 	CarbonGPerKWh float64
 
-	// Linear power model: power(u) = IdleWatts + (MaxWatts-IdleWatts)*u for
-	// CPU utilisation u in [0,1].
-	IdleWatts float64
-	MaxWatts  float64
+	// Power is the node's watts-vs-CPU-utilisation curve (see pkg/power).
+	Power *power.Curve
 }
 
 // CarbonFactor converts gCO2/kWh into the unitless per-node factor the
@@ -90,8 +89,8 @@ func (s *Scenario) Validate() error {
 		if n.CarbonGPerKWh < 0 {
 			return fmt.Errorf("node %q has a negative carbon intensity", n.Name)
 		}
-		if n.IdleWatts <= 0 || n.MaxWatts < n.IdleWatts {
-			return fmt.Errorf("node %q needs 0 < idle watts <= max watts", n.Name)
+		if err := n.Power.Validate(); err != nil {
+			return fmt.Errorf("node %q power curve: %w", n.Name, err)
 		}
 	}
 
@@ -127,19 +126,38 @@ func (s *Scenario) Validate() error {
 	return nil
 }
 
-// DefaultScenario returns the built-in scenario: six identical-capacity nodes
+// DefaultNodeType is the SPEC-derived hardware profile used by DefaultScenario.
+// It matches the scenario's 8-core, 32 GiB nodes, so the workload sizing in
+// DefaultTraceParams applies unchanged.
+const DefaultNodeType = "small-8c"
+
+// DefaultScenario returns the built-in scenario using the embedded power curve
+// for DefaultNodeType. It panics if the embedded curves are invalid, which the
+// power package's tests rule out.
+func DefaultScenario() *Scenario {
+	curves, err := power.Default()
+	if err != nil {
+		panic(fmt.Sprintf("sim: invalid embedded power curves: %v", err))
+	}
+	curve, ok := curves[DefaultNodeType]
+	if !ok {
+		panic(fmt.Sprintf("sim: embedded power curves have no node type %q", DefaultNodeType))
+	}
+	return BuildDefaultScenario(curve)
+}
+
+// BuildDefaultScenario builds the built-in scenario with the given power curve
+// on every node: six identical-capacity nodes
 // in three zones, with a deliberate tension between network and carbon. The
 // cleanest zone (scot) is the farthest from the dirtiest (south), so a
 // latency-driven placement and a carbon-driven placement disagree.
 //
 // Carbon intensities are illustrative UK-like regional values in gCO2/kWh, not
 // measured data.
-func DefaultScenario() *Scenario {
+func BuildDefaultScenario(curve *power.Curve) *Scenario {
 	const (
 		cores    = 8
 		memoryKB = 32 * 1024 * 1024 // 32 GiB
-		idleW    = 100.0
-		maxW     = 250.0
 	)
 
 	zones := []struct {
@@ -158,7 +176,7 @@ func DefaultScenario() *Scenario {
 			name := fmt.Sprintf("%s-%d", z.name, i)
 			nodes = append(nodes, NodeSpec{
 				Name: name, Zone: z.name, Cores: cores, MemoryKB: memoryKB,
-				CarbonGPerKWh: z.carbon, IdleWatts: idleW, MaxWatts: maxW,
+				CarbonGPerKWh: z.carbon, Power: curve,
 			})
 			zoneOf[name] = z.name
 		}

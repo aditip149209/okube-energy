@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/aditip149209/okube/pkg/power"
 )
 
 func approx(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
@@ -28,7 +30,7 @@ func TestPercentileNearestRank(t *testing.T) {
 // dynamic energy = 150 W * (1/8) * 1 h = 0.01875 kWh, i.e. 1.875 g CO2.
 func TestSummarizeHandComputedCO2(t *testing.T) {
 	s := &Scenario{Nodes: []NodeSpec{{
-		Name: "n", Cores: 8, MemoryKB: 1 << 20, CarbonGPerKWh: 100, IdleWatts: 100, MaxWatts: 250,
+		Name: "n", Cores: 8, MemoryKB: 1 << 20, CarbonGPerKWh: 100, Power: power.Linear(100, 250),
 	}}}
 	res := &Result{Config: "x", MakespanSec: 3600, Placements: []Placement{{
 		Task: TraceTask{ID: "t", CPU: 1, DurationSec: 3600, DeadlineSec: 5000, Class: ClassDefault},
@@ -47,7 +49,7 @@ func TestSummarizeHandComputedCO2(t *testing.T) {
 
 func TestSummarizeDeadlinesLatencyAndClasses(t *testing.T) {
 	s := &Scenario{Nodes: []NodeSpec{{
-		Name: "n", Cores: 4, MemoryKB: 1 << 20, CarbonGPerKWh: 200, IdleWatts: 100, MaxWatts: 200,
+		Name: "n", Cores: 4, MemoryKB: 1 << 20, CarbonGPerKWh: 200, Power: power.Linear(100, 200),
 	}}}
 	mk := func(id string, class Class, end, deadline, lat float64, hasDeps bool, wait float64) Placement {
 		return Placement{
@@ -81,5 +83,63 @@ func TestSummarizeDeadlinesLatencyAndClasses(t *testing.T) {
 	}
 	if !approx(sum.MeanDecisionUS, 10) {
 		t.Errorf("mean decision = %vus, want 10", sum.MeanDecisionUS)
+	}
+}
+
+// With a non-linear curve and overlapping tasks, dynamic power depends on total
+// utilisation, not on each task alone. 4-core node, curve 100 W idle,
+// 200 W at 50%, 400 W at 100%; carbon 360 g/kWh (so 1 kWh = 360 g).
+//
+//	A: 1 core, t=0..100     B: 1 core, t=50..150
+//	[0,50)   u=0.25 -> 150 W, dynamic  50 W, A alone
+//	[50,100) u=0.50 -> 200 W, dynamic 100 W, A and B share 50 W each
+//	[100,150) u=0.25 -> 150 W, dynamic  50 W, B alone
+//
+// A and B each get 50*50 + 50*50 = 5000 W*s; the node total is 10000 W*s.
+func TestSummarizeIntegratesNonLinearCurveOverOverlap(t *testing.T) {
+	s := &Scenario{Nodes: []NodeSpec{{
+		Name: "n", Cores: 4, MemoryKB: 1 << 20, CarbonGPerKWh: 360,
+		Power: &power.Curve{Utilisation: []float64{0, 0.5, 1}, Watts: []float64{100, 200, 400}},
+	}}}
+	task := func(id string, class Class) TraceTask {
+		return TraceTask{ID: id, CPU: 1, DurationSec: 100, DeadlineSec: 1e9, Class: class}
+	}
+	res := &Result{Config: "x", MakespanSec: 150, Placements: []Placement{
+		{Task: task("a", ClassCritical), Node: "n", StartSec: 0, EndSec: 100},
+		{Task: task("b", ClassFlexible), Node: "n", StartSec: 50, EndSec: 150},
+	}}
+
+	sum := Summarize(s, res)
+	wantKWh := 10000.0 / joulesPerKWh
+	if !approx(sum.DynamicEnergyKWh, wantKWh) {
+		t.Fatalf("dynamic energy = %v kWh, want %v", sum.DynamicEnergyKWh, wantKWh)
+	}
+	if !approx(sum.DynamicCO2G, wantKWh*360) {
+		t.Fatalf("dynamic CO2 = %v g, want %v", sum.DynamicCO2G, wantKWh*360)
+	}
+	for _, c := range []Class{ClassCritical, ClassFlexible} {
+		if got, want := sum.ByClass[c].DynamicCO2G, 5000.0/joulesPerKWh*360; !approx(got, want) {
+			t.Errorf("%s CO2 = %v g, want %v", c, got, want)
+		}
+	}
+	// Idle: 100 W for 150 s.
+	if !approx(sum.IdleEnergyKWh, 100.0*150/joulesPerKWh) {
+		t.Errorf("idle energy = %v kWh", sum.IdleEnergyKWh)
+	}
+}
+
+// Two tasks that never overlap must cost the same as the old per-task formula
+// on a linear curve: (max-idle) * cpu/cores * duration.
+func TestSummarizeLinearCurveMatchesPerTaskFormula(t *testing.T) {
+	s := &Scenario{Nodes: []NodeSpec{{
+		Name: "n", Cores: 8, MemoryKB: 1 << 20, CarbonGPerKWh: 100, Power: power.Linear(100, 250),
+	}}}
+	res := &Result{Config: "x", MakespanSec: 7200, Placements: []Placement{
+		{Task: TraceTask{ID: "a", CPU: 2, DurationSec: 3600, DeadlineSec: 1e9}, Node: "n", StartSec: 0, EndSec: 3600},
+		{Task: TraceTask{ID: "b", CPU: 1, DurationSec: 3600, DeadlineSec: 1e9}, Node: "n", StartSec: 3600, EndSec: 7200},
+	}}
+	// 150 W * (2/8) * 1 h + 150 W * (1/8) * 1 h = 0.0375 + 0.01875 kWh.
+	if got, want := Summarize(s, res).DynamicEnergyKWh, 0.05625; !approx(got, want) {
+		t.Fatalf("dynamic energy = %v kWh, want %v", got, want)
 	}
 }
