@@ -1,0 +1,23 @@
+name: demo-app
+services:
+  db:
+    image: redis:7-alpine
+    ports:
+      "6379/tcp": "6379"
+
+  echo:
+    image: timboring/echo-server:latest
+    ports:
+      "7777/tcp": "7777"
+    env:
+      MESSAGE: "hello from okube"
+    dependsOn: [db]
+    healthCheck: "/health"
+    resources:
+      cpu: 0.5
+      memory: 268435456   # bytes
+    # Energy-aware scheduling metadata (all optional):
+    #   criticality: critical | urgent  -> energy weight x0.35
+    #   flexible: true                  -> energy weight x1.4
+    flexible: true
+    estimatedDuration: 300              # seconds
