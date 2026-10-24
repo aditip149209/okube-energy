@@ -54,3 +54,11 @@ my_env/
 __pycache__/
 *.pyc
 
+# --- LaTeX build files (report/) ---
+report/*.aux
+report/*.log
+report/*.out
+report/*.nav
+report/*.snm
+report/*.toc
+report/*.vrb
