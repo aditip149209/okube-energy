@@ -36,19 +36,26 @@ func Load(path string) (*Intensity, error) {
 	return &i, nil
 }
 
-// For returns the carbon intensity for a node, checked first by ID then by
-// address, falling back to the configured default. A nil receiver returns 0
-// so callers can pass an unloaded *Intensity without a nil check; the
-// scheduler's own fallback constant applies from there.
-func (i *Intensity) For(id, address string) float64 {
+// Lookup returns the carbon intensity for a node, checked first by ID then by
+// address, falling back to the configured default. The bool is false only for
+// a nil receiver (no config loaded), so callers can tell "no data" apart from
+// a genuine intensity of 0 (a fully low-carbon grid).
+func (i *Intensity) Lookup(id, address string) (float64, bool) {
 	if i == nil {
-		return 0
+		return 0, false
 	}
 	if v, ok := i.Nodes[id]; ok {
-		return v
+		return v, true
 	}
 	if v, ok := i.Nodes[address]; ok {
-		return v
+		return v, true
 	}
-	return i.Default
+	return i.Default, true
+}
+
+// For is Lookup without the "known" flag: a nil receiver returns 0. Prefer
+// Lookup where the difference between "unknown" and 0 matters.
+func (i *Intensity) For(id, address string) float64 {
+	v, _ := i.Lookup(id, address)
+	return v
 }

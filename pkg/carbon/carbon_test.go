@@ -53,3 +53,23 @@ func TestLoadMissingFile(t *testing.T) {
 		t.Fatal("expected an error loading a missing file")
 	}
 }
+
+func TestLookupDistinguishesZeroFromUnknown(t *testing.T) {
+	path := writeConfig(t, `{"default": 0.5, "nodes": {"clean": 0}}`)
+	intensity, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if v, ok := intensity.Lookup("clean", ""); !ok || v != 0 {
+		t.Fatalf("expected a configured zero to be known and 0, got %v (known=%v)", v, ok)
+	}
+	if v, ok := intensity.Lookup("other", ""); !ok || v != 0.5 {
+		t.Fatalf("expected default 0.5 to be known, got %v (known=%v)", v, ok)
+	}
+
+	var none *Intensity
+	if _, ok := none.Lookup("clean", ""); ok {
+		t.Fatal("expected a nil *Intensity to report unknown")
+	}
+}
