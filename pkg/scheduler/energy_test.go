@@ -14,8 +14,8 @@ func TestApplyEnergyAwareScorePrefersLowerEnergyNode(t *testing.T) {
 	}
 
 	nodes := []*node.Node{
-		{Name: "node-a", TaskCount: 5, Memory: 16000, MemoryAllocated: 12000, CarbonIntensity: 0.8},
-		{Name: "node-b", TaskCount: 1, Memory: 16000, MemoryAllocated: 3000, CarbonIntensity: 0.2},
+		{Name: "node-a", TaskCount: 5, Memory: 16000, MemoryAllocated: 12000, CarbonIntensity: node.CarbonOf(0.8)},
+		{Name: "node-b", TaskCount: 1, Memory: 16000, MemoryAllocated: 3000, CarbonIntensity: node.CarbonOf(0.2)},
 	}
 
 	weight := 0.8
@@ -32,8 +32,8 @@ func TestApplyEnergyAwareScoreReducesWeightForCriticalJobs(t *testing.T) {
 	}
 
 	nodes := []*node.Node{
-		{Name: "node-a", TaskCount: 3, Memory: 16000, MemoryAllocated: 8000, CarbonIntensity: 0.8},
-		{Name: "node-b", TaskCount: 1, Memory: 16000, MemoryAllocated: 4000, CarbonIntensity: 0.2},
+		{Name: "node-a", TaskCount: 3, Memory: 16000, MemoryAllocated: 8000, CarbonIntensity: node.CarbonOf(0.8)},
+		{Name: "node-b", TaskCount: 1, Memory: 16000, MemoryAllocated: 4000, CarbonIntensity: node.CarbonOf(0.2)},
 	}
 
 	weight := 0.8
@@ -53,8 +53,8 @@ func TestApplyEnergyAwareScoreZeroWeightDisablesEnergyContribution(t *testing.T)
 		"node-b": 2.0,
 	}
 	nodes := []*node.Node{
-		{Name: "node-a", CarbonIntensity: 0.9},
-		{Name: "node-b", CarbonIntensity: 0.1},
+		{Name: "node-a", CarbonIntensity: node.CarbonOf(0.9)},
+		{Name: "node-b", CarbonIntensity: node.CarbonOf(0.1)},
 	}
 
 	zero := 0.0
@@ -78,8 +78,8 @@ func TestResolveEnergyWeightNilFallsBackToDefault(t *testing.T) {
 // scores are on the 0-100 network scale or the raw 0.1/1.0 round-robin scale.
 func TestApplyEnergyAwareScoreInfluenceIsScaleInvariant(t *testing.T) {
 	nodes := []*node.Node{
-		{Name: "node-a", CarbonIntensity: 0.8},
-		{Name: "node-b", CarbonIntensity: 0.2},
+		{Name: "node-a", CarbonIntensity: node.CarbonOf(0.8)},
+		{Name: "node-b", CarbonIntensity: node.CarbonOf(0.2)},
 	}
 	weight := 0.5
 
@@ -95,8 +95,8 @@ func TestApplyEnergyAwareScoreInfluenceIsScaleInvariant(t *testing.T) {
 
 func TestApplyEnergyAwareScoreEqualCarbonKeepsBaseRanking(t *testing.T) {
 	nodes := []*node.Node{
-		{Name: "node-a", CarbonIntensity: 0.5},
-		{Name: "node-b", CarbonIntensity: 0.5},
+		{Name: "node-a", CarbonIntensity: node.CarbonOf(0.5)},
+		{Name: "node-b", CarbonIntensity: node.CarbonOf(0.5)},
 	}
 	scores := applyEnergyAwareScore(task.Task{Flexible: true}, nodes, map[string]float64{"node-a": 10, "node-b": 40}, nil)
 	if scores["node-a"] >= scores["node-b"] {
@@ -107,16 +107,69 @@ func TestApplyEnergyAwareScoreEqualCarbonKeepsBaseRanking(t *testing.T) {
 // Task memory is bytes, node memory is KB: a task using 1 GiB on a 4 GiB node
 // must add 0.25 to the load factor, not ~0.
 func TestEstimateNodeEnergyCostConvertsMemoryUnits(t *testing.T) {
-	n := &node.Node{Name: "n", Memory: 4 * 1024 * 1024, Cores: 4, CarbonIntensity: 1.0}
+	n := &node.Node{Name: "n", Memory: 4 * 1024 * 1024, Cores: 4, CarbonIntensity: node.CarbonOf(1.0)}
 
 	idle := estimateNodeEnergyCost(n, &task.Task{})
 	loaded := estimateNodeEnergyCost(n, &task.Task{Memory: 1 << 30, Cpu: 2})
 
-	// load = 1 + 0.25 (mem) + 0.5 (cpu); cost = carbon*load*10
-	if want := 10.0; idle != want {
+	// carbon 1.0 saturates the carbon term; cost = 100 * min(1, load/2).
+	// idle load = 1; loaded load = 1 + 0.25 (mem) + 0.5 (cpu) = 1.75.
+	if want := 50.0; idle != want {
 		t.Fatalf("expected idle cost %v, got %v", want, idle)
 	}
-	if want := 17.5; loaded != want {
+	if want := 87.5; loaded != want {
 		t.Fatalf("expected loaded cost %v, got %v", want, loaded)
+	}
+}
+
+// A real intensity of 0 is a fully low-carbon grid, not "unset": it must cost
+// nothing, while a node with no data falls back to the default factor.
+func TestEstimateNodeEnergyCostZeroCarbonIsFreeAndNilIsDefault(t *testing.T) {
+	zero := &node.Node{Name: "zero", CarbonIntensity: node.CarbonOf(0)}
+	if got := estimateNodeEnergyCost(zero, &task.Task{}); got != 0 {
+		t.Fatalf("expected zero carbon to cost 0, got %v", got)
+	}
+
+	unknown := &node.Node{Name: "unknown"}
+	atDefault := &node.Node{Name: "default", CarbonIntensity: node.CarbonOf(defaultCarbonFactor)}
+	if got, want := estimateNodeEnergyCost(unknown, &task.Task{}), estimateNodeEnergyCost(atDefault, &task.Task{}); got != want {
+		t.Fatalf("expected unknown carbon to cost like the default factor (%v), got %v", want, got)
+	}
+}
+
+// The point of the fixed scale: a spread between uniformly clean grids must
+// barely move the score, while a real spread must.
+func TestEnergyCostSpreadDependsOnAbsoluteIntensityNotJustRank(t *testing.T) {
+	spread := func(intensities ...float64) float64 {
+		lo, hi := 1e9, -1e9
+		for _, v := range intensities {
+			c := estimateNodeEnergyCost(&node.Node{CarbonIntensity: node.CarbonOf(v)}, &task.Task{})
+			if c < lo {
+				lo = c
+			}
+			if c > hi {
+				hi = c
+			}
+		}
+		return hi - lo
+	}
+
+	clean := spread(0, 0.004, 0.015) // 0, 4, 15 gCO2/kWh
+	real := spread(0, 0.100, 0.237)  // 0, 100, 237 gCO2/kWh
+	if clean >= 5 {
+		t.Fatalf("expected a spread between very clean grids to stay small, got %v", clean)
+	}
+	if real <= 5*clean {
+		t.Fatalf("expected a real carbon spread to matter far more: clean=%v real=%v", clean, real)
+	}
+}
+
+// Carbon at or above the reference saturates, so two very dirty grids cost the
+// same and the scheduler does not chase differences that no longer matter.
+func TestEnergyCostSaturatesAtReferenceIntensity(t *testing.T) {
+	a := estimateNodeEnergyCost(&node.Node{CarbonIntensity: node.CarbonOf(refCarbonFactor)}, &task.Task{})
+	b := estimateNodeEnergyCost(&node.Node{CarbonIntensity: node.CarbonOf(refCarbonFactor * 3)}, &task.Task{})
+	if a != b {
+		t.Fatalf("expected saturation at the reference intensity, got %v vs %v", a, b)
 	}
 }

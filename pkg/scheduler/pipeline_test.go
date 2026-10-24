@@ -10,8 +10,8 @@ import (
 func TestComposableSchedulerDisableEnergyScoreSkipsEnergyStage(t *testing.T) {
 	s := NewPipelineScheduler("roundrobin", "kahn")
 	nodes := []*node.Node{
-		{Name: "node-a", CarbonIntensity: 0.9},
-		{Name: "node-b", CarbonIntensity: 0.1},
+		{Name: "node-a", CarbonIntensity: node.CarbonOf(0.9)},
+		{Name: "node-b", CarbonIntensity: node.CarbonOf(0.1)},
 	}
 
 	scores := s.Score(task.Task{}, nodes, &ScoreContext{DisableEnergyScore: true})
@@ -38,8 +38,8 @@ func TestComposableSchedulerDisableEnergyScoreSkipsEnergyStage(t *testing.T) {
 func TestComposableSchedulerEnergyScoreEnabledByDefault(t *testing.T) {
 	s := NewPipelineScheduler("roundrobin", "kahn")
 	nodes := []*node.Node{
-		{Name: "node-a", CarbonIntensity: 0.9},
-		{Name: "node-b", CarbonIntensity: 0.1},
+		{Name: "node-a", CarbonIntensity: node.CarbonOf(0.9)},
+		{Name: "node-b", CarbonIntensity: node.CarbonOf(0.1)},
 	}
 
 	scores := s.Score(task.Task{}, nodes, nil)
