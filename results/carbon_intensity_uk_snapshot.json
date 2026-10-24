@@ -1,0 +1,43 @@
+{
+  "default": 0.073,
+  "nodes": {
+    "worker-1": 0.0,
+    "worker-2": 0.005,
+    "worker-3": 0.137
+  },
+  "source": {
+    "api": "https://api.carbonintensity.org.uk/regional",
+    "licence": "CC BY 4.0",
+    "operator": "NESO, with University of Oxford, EDF Europe and WWF",
+    "window_utc": [
+      "2026-10-24T12:30Z",
+      "2026-10-24T13:00Z"
+    ],
+    "kind": "forecast (indicative), gCO2/kWh divided by 1000",
+    "regions_gco2_per_kwh": {
+      "North Scotland": 0.0,
+      "South Scotland": 0.0,
+      "North West England": 5.0,
+      "North East England": 0.0,
+      "Yorkshire": 34.0,
+      "North Wales & Merseyside": 31.0,
+      "South Wales": 137.0,
+      "West Midlands": 23.0,
+      "East Midlands": 105.0,
+      "East England": 114.0,
+      "South West England": 229.0,
+      "South England": 138.0,
+      "London": 107.0,
+      "South East England": 92.0,
+      "England": 79.0,
+      "Scotland": 0.0,
+      "Wales": 90.0,
+      "GB": 73.0
+    },
+    "mapping": {
+      "worker-1": "North Scotland",
+      "worker-2": "North West England",
+      "worker-3": "South Wales"
+    }
+  }
+}
