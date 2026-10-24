@@ -18,7 +18,9 @@ type Workload struct {
 // ExperimentOptions describes the full comparison: every config on every
 // workload over several seeds, plus an energy-weight sweep.
 type ExperimentOptions struct {
-	Seeds        int
+	Seeds     int
+	FirstSeed int64 // seeds run are FirstSeed .. FirstSeed+Seeds-1; 0 means 1
+
 	Workloads    []Workload
 	SweepWeights []float64 // applied to energy-only and fused
 }
@@ -56,9 +58,14 @@ func RunExperiment(s *Scenario, opts ExperimentOptions) ([]RunRow, error) {
 		return nil, fmt.Errorf("no workloads")
 	}
 
+	first := opts.FirstSeed
+	if first == 0 {
+		first = 1
+	}
+
 	var rows []RunRow
 	for _, w := range opts.Workloads {
-		for seed := int64(1); seed <= int64(opts.Seeds); seed++ {
+		for seed := first; seed < first+int64(opts.Seeds); seed++ {
 			params := w.Params
 			params.Seed = seed
 			trace, err := GenerateTrace(s, params)

@@ -73,3 +73,22 @@ func TestLookupDistinguishesZeroFromUnknown(t *testing.T) {
 		t.Fatal("expected a nil *Intensity to report unknown")
 	}
 }
+
+// The snapshot written by scripts/fetch_uk_carbon.py must load with the same
+// loader the manager uses, with its extra "source" block ignored and a real
+// intensity of 0 (North Scotland) kept as a known zero.
+func TestLoadsUKSnapshotFromFetchScript(t *testing.T) {
+	intensity, err := Load("../../results/carbon_intensity_uk_snapshot.json")
+	if err != nil {
+		t.Skipf("no snapshot present: %v", err)
+	}
+	if v, ok := intensity.Lookup("worker-1", ""); !ok || v != 0 {
+		t.Fatalf("expected worker-1 (North Scotland) to be a known 0, got %v (known=%v)", v, ok)
+	}
+	if v, ok := intensity.Lookup("worker-3", ""); !ok || v <= 0 || v >= 1 {
+		t.Fatalf("expected worker-3 (South Wales) to be a factor in (0,1), got %v (known=%v)", v, ok)
+	}
+	if intensity.Default <= 0 {
+		t.Fatalf("expected a positive GB default, got %v", intensity.Default)
+	}
+}

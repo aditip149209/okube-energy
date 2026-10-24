@@ -102,3 +102,19 @@ func mustExperiment(t *testing.T) []RunRow {
 	}
 	return rows
 }
+
+func TestFirstSeedSelectsDisjointSeedRanges(t *testing.T) {
+	opts := smallOptions()
+	opts.Seeds, opts.FirstSeed = 2, 100
+	rows, err := RunExperiment(DefaultScenario(), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seeds := map[int64]bool{}
+	for _, r := range rows {
+		seeds[r.Seed] = true
+	}
+	if len(seeds) != 2 || !seeds[100] || !seeds[101] {
+		t.Fatalf("expected seeds {100,101}, got %v", seeds)
+	}
+}
