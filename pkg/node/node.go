@@ -29,8 +29,14 @@ type Node struct {
 	Role            string
 	TaskCount       int
 	Cpu             int
-	CarbonIntensity float64
+	// CarbonIntensity is the grid carbon intensity as a unitless factor (e.g.
+	// 0.26 for 260 gCO2/kWh). nil means unknown; 0 is a real, fully
+	// low-carbon grid and must not be confused with "not set".
+	CarbonIntensity *float64
 }
+
+// CarbonOf returns a pointer to v, for setting Node.CarbonIntensity.
+func CarbonOf(v float64) *float64 { return &v }
 
 type Option func(*Node)
 
