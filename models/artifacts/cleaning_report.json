@@ -1,0 +1,18 @@
+{
+  "summary_rows": 1158,
+  "detail_systems": 1118,
+  "incomplete_curves_dropped": 0,
+  "dropped_missing_values": 3,
+  "dropped_nonpositive_hardware": 0,
+  "dropped_implausible_mhz": 0,
+  "dropped_idle_not_below_max": 0,
+  "dropped_power_not_rising": 0,
+  "dropped_nonpositive_power": 0,
+  "systems_kept": 1115,
+  "rows_kept": 12265,
+  "years": [
+    2007,
+    2026
+  ],
+  "warnings": []
+}
