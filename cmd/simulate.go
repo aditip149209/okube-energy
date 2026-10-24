@@ -28,6 +28,7 @@ Results are written as CSV files to --out and a summary is printed:
 	Run: func(cmd *cobra.Command, args []string) {
 		outDir, _ := cmd.Flags().GetString("out")
 		seeds, _ := cmd.Flags().GetInt("seeds")
+		firstSeed, _ := cmd.Flags().GetInt64("first-seed")
 		workloadNames, _ := cmd.Flags().GetStringSlice("workloads")
 		sweep, _ := cmd.Flags().GetFloat64Slice("sweep")
 		curvesPath, _ := cmd.Flags().GetString("power-curves")
@@ -51,7 +52,7 @@ Results are written as CSV files to --out and a summary is printed:
 			"default": sim.DefaultTraceParams(),
 			"stress":  sim.StressTraceParams(),
 		}
-		opts := sim.ExperimentOptions{Seeds: seeds, SweepWeights: sweep}
+		opts := sim.ExperimentOptions{Seeds: seeds, FirstSeed: firstSeed, SweepWeights: sweep}
 		for _, name := range workloadNames {
 			params, ok := available[name]
 			if !ok {
@@ -105,6 +106,7 @@ func init() {
 
 	simulateCmd.Flags().String("out", "sim-results", "Directory to write the CSV results to")
 	simulateCmd.Flags().Int("seeds", 20, "Number of seeds (independent traces) per workload")
+	simulateCmd.Flags().Int64("first-seed", 1, "First seed; runs seeds first-seed .. first-seed+seeds-1 (use disjoint ranges to select settings and report results)")
 	simulateCmd.Flags().StringSlice("workloads", []string{"default", "stress"}, "Workloads to run: default (~35% load) and/or stress (saturating)")
 	simulateCmd.Flags().String("power-curves", "", "power_curves.json from models/train_power_model.py (default: curves embedded in the binary)")
 	simulateCmd.Flags().Float64Slice("sweep", []float64{0, 0.1, 0.2, 0.5, 1, 2, 5}, "Energy weights for the energy-only and fused sweep")
