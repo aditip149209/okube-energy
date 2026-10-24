@@ -630,7 +630,9 @@ func (m *Manager) SelectWorker(ctx context.Context, t task.Task) (*store.Worker,
 	for _, w := range workers {
 		workerMap[w.ID] = w
 		n := node.NewNode(w.ID, w.Address, "worker")
-		n.CarbonIntensity = m.carbonIntensity.For(w.ID, w.Address)
+		if v, ok := m.carbonIntensity.Lookup(w.ID, w.Address); ok {
+			n.CarbonIntensity = node.CarbonOf(v)
+		}
 		n.TaskCount = taskCounts[w.ID]
 		nodes = append(nodes, n)
 	}
