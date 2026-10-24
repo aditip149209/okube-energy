@@ -17,9 +17,9 @@ func TestPipelineRunsOffline(t *testing.T) {
 	// farthest but cleanest.
 	nodes := func() []*node.Node {
 		return []*node.Node{
-			{Name: "n1", CarbonIntensity: 0.9},
-			{Name: "n2", CarbonIntensity: 0.5},
-			{Name: "n3", CarbonIntensity: 0.1},
+			{Name: "n1", CarbonIntensity: node.CarbonOf(0.9)},
+			{Name: "n2", CarbonIntensity: node.CarbonOf(0.5)},
+			{Name: "n3", CarbonIntensity: node.CarbonOf(0.1)},
 		}
 	}
 	topo := &topology.NetworkTopology{NodeLatencies: map[string]map[string]float64{

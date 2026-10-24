@@ -87,8 +87,8 @@ func (s *Scenario) Validate() error {
 		if n.Cores <= 0 || n.MemoryKB <= 0 {
 			return fmt.Errorf("node %q needs positive cores and memory", n.Name)
 		}
-		if n.CarbonGPerKWh <= 0 {
-			return fmt.Errorf("node %q needs a positive carbon intensity", n.Name)
+		if n.CarbonGPerKWh < 0 {
+			return fmt.Errorf("node %q has a negative carbon intensity", n.Name)
 		}
 		if n.IdleWatts <= 0 || n.MaxWatts < n.IdleWatts {
 			return fmt.Errorf("node %q needs 0 < idle watts <= max watts", n.Name)

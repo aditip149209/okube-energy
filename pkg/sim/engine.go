@@ -209,7 +209,7 @@ func candidateNodes(states []*nodeState, tk TraceTask, seed int64) []*node.Node 
 			Memory:          st.spec.MemoryKB,
 			MemoryAllocated: int(st.usedMemBytes / 1024),
 			TaskCount:       st.tasks,
-			CarbonIntensity: st.spec.CarbonFactor(),
+			CarbonIntensity: node.CarbonOf(st.spec.CarbonFactor()),
 		})
 	}
 
