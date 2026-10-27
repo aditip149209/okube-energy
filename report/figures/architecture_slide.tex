@@ -1,0 +1,37 @@
+% Simplified architecture for slides: larger text, fewer boxes.
+\begin{tikzpicture}[
+  font=\sffamily\footnotesize,
+  box/.style={draw=navy!70, rounded corners=3pt, fill=white, align=center, inner sep=3pt,
+              line width=0.6pt, minimum height=1.0cm, minimum width=2.85cm},
+  arr/.style={-{Stealth[length=5pt]}, line width=0.8pt, navy!80},
+  darr/.style={arr, dashed},
+  cont/.style={draw=navy!45, rounded corners=5pt, inner sep=6pt, fill=navy!4},
+  title/.style={font=\sffamily\bfseries\footnotesize, navy, anchor=west},
+]
+\node[box] (in1) at (1.5,5.5)   {\textbf{Task metadata}\\class, duration, deadline};
+\node[box] (in2) at (4.65,5.5)  {\textbf{Node state}\\load, capacity};
+\node[box] (in3) at (7.8,5.5)   {\textbf{Network \& apps}\\latency, dependencies};
+\node[box, fill=mint, draw=okgreen] (in4) at (10.95,5.5) {\textbf{Carbon source}\\static JSON / UK API};
+
+\node[box] (p1) at (1.5,3.4)  {Queue sort\\+ filters};
+\node[box, fill=navy!14, draw=navy] (p2) at (4.65,3.4) {Resource +\\\textbf{network} score};
+\node[box, fill=okorange!25, draw=okorange!85!black, line width=1.1pt] (p3) at (7.8,3.4) {\textbf{Energy score}\\(new)};
+\node[box] (p4) at (10.95,3.4) {Select\\lowest score};
+\foreach \a/\b in {p1/p2,p2/p3,p3/p4}{\draw[arr] (\a) -- (\b);}
+\node[title] (pt) at (0.1,4.35) {Okube manager: composable scheduling pipeline (Go); runs tasks on Docker workers, state in etcd};
+\begin{scope}[on background layer]
+  \node[cont, fit=(p1)(p4)(pt)] (pipe) {};
+\end{scope}
+\foreach \n in {in1,in2,in3,in4}{\draw[arr] (\n.south) -- (\n.south |- pipe.north);}
+
+\node[box, fill=mint, draw=okgreen] (e1) at (1.5,0.5) {\textbf{SPECpower}\\1,118 systems};
+\node[box, fill=mint, draw=okgreen] (e2) at (4.65,0.5) {\textbf{XGBoost}\\power curves};
+\node[box, fill=okorange!15, draw=okorange!85!black] (e3) at (7.8,0.5) {\textbf{Simulator}\\same pipeline code};
+\node[box, fill=okorange!15, draw=okorange!85!black] (e4) at (10.95,0.5) {\textbf{Metrics}\\CO$_2$, latency};
+\foreach \a/\b in {e1/e2,e2/e3,e3/e4}{\draw[arr] (\a) -- (\b);}
+\node[title] (et) at (0.1,1.38) {Offline power model and evaluation (this work)};
+\begin{scope}[on background layer]
+  \node[cont, fit=(e1)(e4)(et)] (evalc) {};
+\end{scope}
+\draw[darr] (e3.north |- evalc.north) -- (e3.north |- pipe.south);
+\end{tikzpicture}

@@ -1,0 +1,62 @@
+% Detailed system architecture. Needs tikz libraries: positioning, fit,
+% arrows.meta, backgrounds; colours from colors.tex.
+\begin{tikzpicture}[
+  font=\sffamily\scriptsize,
+  box/.style={draw=navy!70, rounded corners=2pt, fill=white, align=center,
+              inner sep=3pt, line width=0.5pt, minimum height=1.15cm},
+  stage/.style={box, fill=gray!12, minimum width=2.2cm, minimum height=1.05cm},
+  netstage/.style={stage, fill=navy!14, draw=navy, line width=0.8pt},
+  enstage/.style={stage, fill=okorange!25, draw=okorange!85!black, line width=1.0pt},
+  cont/.style={draw=navy!45, rounded corners=4pt, inner sep=6pt, fill=navy!4, line width=0.5pt},
+  arr/.style={-{Stealth[length=4pt]}, line width=0.6pt, navy!80},
+  darr/.style={arr, dashed},
+  title/.style={font=\sffamily\bfseries\scriptsize, navy, anchor=west},
+]
+% ---- inputs -----------------------------------------------------------------
+\node[box, minimum width=4.1cm] (in1) at (2.15,10.2)  {\textbf{Task metadata}\\criticality, flexible,\\est.\ duration, deadline};
+\node[box, minimum width=4.1cm] (in2) at (6.45,10.2)  {\textbf{Node state}\\cores, memory, task count,\\carbon intensity};
+\node[box, minimum width=4.1cm] (in3) at (10.75,10.2) {\textbf{Network \& apps}\\latency / bandwidth matrix,\\service dependency graph};
+\node[box, minimum width=4.1cm, fill=mint, draw=okgreen] (in4) at (15.05,10.2) {\textbf{Carbon source}\\static JSON (evaluated),\\UK Carbon Intensity API (snapshot)};
+
+% ---- scheduling pipeline -----------------------------------------------------
+\node[stage]    (s1) at (1.2,7.3)   {1. Queue\\sort};
+\node[stage]    (s2) at (3.65,7.3)  {2. Resource\\filter};
+\node[netstage] (s3) at (6.1,7.3)   {3. Network\\filter};
+\node[stage]    (s4) at (8.55,7.3)  {4. Resource\\score};
+\node[netstage] (s5) at (11.0,7.3)  {5. Network\\score};
+\node[enstage]  (s6) at (13.45,7.3) {6. \textbf{Energy}\\\textbf{score} (new)};
+\node[stage]    (s7) at (15.9,7.3)  {7. Select\\lowest};
+\foreach \a/\b in {s1/s2,s2/s3,s3/s4,s4/s5,s5/s6,s6/s7}{\draw[arr] (\a) -- (\b);}
+\node[title] (ptitle) at (0.15,8.55) {Okube manager: composable scheduling pipeline (Go)};
+\node[align=center, fill=white, draw=okorange!85!black, rounded corners=2pt, inner sep=3pt, minimum width=15.6cm] (form) at (8.55,5.6)
+  {$\mathrm{score}(n)=\mathrm{norm}\big(\mathrm{base}(n)\big)+w_e(t)\,E(n,t),\quad
+    E(n,t)=100\,\min\!\big(1,\tfrac{c_n}{c_{\mathrm{ref}}}\big)\,\min\!\big(1,\tfrac{L_{n,t}}{2}\big),\quad
+    w_e(t)=w\times\{0.35,\,1,\,1.4\}$};
+\node[align=center, font=\sffamily\tiny, text=navy!80] (toggle) at (8.55,4.85)
+  {stages 5 and 6 switch on/off independently: default, network-only, energy-only and fused configurations run on one code path};
+\begin{scope}[on background layer]
+  \node[cont, fit=(s1)(s7)(ptitle)(form)(toggle)] (pipe) {};
+\end{scope}
+
+% ---- cluster ------------------------------------------------------------------
+\node[box, minimum width=5.4cm] (workers) at (2.6,3.25) {\textbf{Workers} (Docker)\\run tasks, report \texttt{/stats}};
+\node[box, minimum width=5.4cm] (etcd)    at (8.3,3.25) {\textbf{etcd}\\task and app state, topology, leader election};
+\foreach \n in {in1,in2,in3,in4}{\draw[arr] (\n.south) -- (\n.south |- pipe.north);}
+\draw[arr] (workers.north |- pipe.south) -- (workers.north);
+\draw[arr] (etcd.north |- pipe.south) -- (etcd.north);
+
+% ---- offline evaluation and power model ------------------------------------------
+\node[box, minimum width=2.45cm, fill=mint, draw=okgreen] (e1) at (1.3,0.1) {\textbf{SPECpower}\\1{,}118 systems,\\idle to 100\% watts};
+\node[box, minimum width=2.45cm, fill=mint, draw=okgreen] (e2) at (4.0,0.1) {\textbf{Clean}\\per-node,\\drop bad rows};
+\node[box, minimum width=2.45cm, fill=mint, draw=okgreen] (e3) at (6.7,0.1) {\textbf{XGBoost}\\log-watts,\\monotone in load};
+\node[box, minimum width=2.45cm, fill=mint, draw=okgreen] (e4) at (9.4,0.1) {\textbf{Power curves}\\watts vs.\ CPU\\utilisation};
+\node[box, minimum width=3.3cm, fill=okorange!15, draw=okorange!85!black] (e5) at (12.65,0.1) {\textbf{Simulator}\\6 nodes, 3 zones,\\seeded traces};
+\node[box, minimum width=2.45cm, fill=okorange!15, draw=okorange!85!black] (e6) at (15.85,0.1) {\textbf{Metrics}\\CO$_2$, latency,\\deadlines, overhead};
+\foreach \a/\b in {e1/e2,e2/e3,e3/e4,e4/e5,e5/e6}{\draw[arr] (\a) -- (\b);}
+\node[title] (etitle) at (0.15,1.35) {Offline evaluation and power model (this work)};
+\begin{scope}[on background layer]
+  \node[cont, fit=(e1)(e6)(etitle)] (evalc) {};
+\end{scope}
+\draw[darr] (e5.north |- evalc.north) -- (e5.north |- pipe.south)
+  node[midway, right, align=left, font=\sffamily\tiny, text=navy!80] {drives the\\same code};
+\end{tikzpicture}

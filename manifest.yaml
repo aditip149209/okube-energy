@@ -1,4 +1,4 @@
-name: demo-app
+name: demo-app2
 services:
   db:
     image: redis:7-alpine
